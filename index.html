@@ -1,0 +1,1287 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FastTrack — Intermittent Fasting Tracker</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0f14;
+    --surface: #161820;
+    --surface2: #1e2028;
+    --border: rgba(255,255,255,0.07);
+    --border2: rgba(255,255,255,0.12);
+    --accent: #7c6af7;
+    --accent2: #a594ff;
+    --accent-dim: rgba(124,106,247,0.15);
+    --green: #34d399;
+    --green-dim: rgba(52,211,153,0.12);
+    --amber: #fbbf24;
+    --amber-dim: rgba(251,191,36,0.12);
+    --red: #f87171;
+    --red-dim: rgba(248,113,113,0.12);
+    --text: #f0f0f5;
+    --text2: #9899a8;
+    --text3: #5c5d6e;
+    --radius: 14px;
+    --radius-sm: 8px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    font-size: 15px;
+    line-height: 1.6;
+  }
+
+  h1, h2, h3, .heading { font-family: 'Syne', sans-serif; }
+
+  .app {
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 0 0 100px;
+    min-height: 100vh;
+  }
+
+  /* Header */
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 20px 0;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--bg);
+  }
+
+  .logo {
+    font-family: 'Syne', sans-serif;
+    font-size: 20px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    color: var(--text);
+  }
+
+  .logo span { color: var(--accent2); }
+
+  .streak-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--amber-dim);
+    border: 1px solid rgba(251,191,36,0.2);
+    color: var(--amber);
+    font-size: 13px;
+    font-weight: 500;
+    padding: 5px 12px;
+    border-radius: 99px;
+  }
+
+  .streak-badge .fire { font-size: 15px; }
+
+  /* Pages */
+  .page { display: none; padding: 20px; }
+  .page.active { display: block; }
+
+  /* Timer Card */
+  .timer-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 28px 24px;
+    text-align: center;
+    margin-bottom: 16px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .timer-card::before {
+    content: '';
+    position: absolute;
+    top: -60px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 200px;
+    height: 200px;
+    background: radial-gradient(circle, rgba(124,106,247,0.15) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .timer-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text2);
+    margin-bottom: 20px;
+  }
+
+  .status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--text3);
+  }
+
+  .status-dot.fasting { background: var(--accent); box-shadow: 0 0 8px var(--accent); animation: pulse 2s infinite; }
+  .status-dot.eating { background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse 2s infinite; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* Ring */
+  .ring-wrap {
+    position: relative;
+    width: 200px;
+    height: 200px;
+    margin: 0 auto 24px;
+  }
+
+  .ring-svg { transform: rotate(-90deg); }
+
+  .ring-bg { fill: none; stroke: var(--surface2); stroke-width: 12; }
+  .ring-prog {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 12;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 1s ease;
+  }
+  .ring-prog.eating { stroke: var(--green); }
+  .ring-prog.warning { stroke: var(--amber); }
+
+  .ring-center {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+  }
+
+  .ring-time {
+    font-family: 'Syne', sans-serif;
+    font-size: 36px;
+    font-weight: 700;
+    letter-spacing: -1px;
+    line-height: 1;
+    color: var(--text);
+  }
+
+  .ring-label {
+    font-size: 11px;
+    color: var(--text2);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-top: 4px;
+  }
+
+  .ring-pct {
+    font-size: 13px;
+    color: var(--accent2);
+    font-weight: 500;
+    margin-top: 2px;
+  }
+
+  /* Protocol selector */
+  .protocol-row {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
+
+  .proto-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text2);
+    font-family: 'Syne', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 6px 14px;
+    border-radius: 99px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .proto-btn:hover { border-color: var(--border2); color: var(--text); }
+  .proto-btn.active {
+    background: var(--accent-dim);
+    border-color: var(--accent);
+    color: var(--accent2);
+  }
+
+  /* CTA Button */
+  .cta-btn {
+    width: 100%;
+    padding: 16px;
+    border-radius: var(--radius);
+    font-family: 'Syne', sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s;
+    letter-spacing: 0.02em;
+  }
+
+  .cta-btn.start {
+    background: var(--accent);
+    color: #fff;
+  }
+  .cta-btn.start:hover { background: var(--accent2); transform: translateY(-1px); }
+
+  .cta-btn.stop {
+    background: var(--red-dim);
+    border: 1px solid rgba(248,113,113,0.3);
+    color: var(--red);
+  }
+  .cta-btn.stop:hover { background: rgba(248,113,113,0.2); }
+
+  /* Stats row */
+  .stats-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+
+  .stat-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 12px;
+    text-align: center;
+  }
+
+  .stat-val {
+    font-family: 'Syne', sans-serif;
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1;
+  }
+
+  .stat-label {
+    font-size: 11px;
+    color: var(--text2);
+    margin-top: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  /* Section title */
+  .section-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text3);
+    margin: 24px 0 12px;
+  }
+
+  /* History list */
+  .history-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 8px;
+    transition: border-color 0.2s;
+  }
+
+  .history-item:hover { border-color: var(--border2); }
+
+  .hist-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+
+  .hist-icon.complete { background: var(--green-dim); }
+  .hist-icon.incomplete { background: var(--amber-dim); }
+
+  .hist-info { flex: 1; min-width: 0; }
+
+  .hist-date {
+    font-family: 'Syne', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .hist-detail {
+    font-size: 12px;
+    color: var(--text2);
+    margin-top: 2px;
+  }
+
+  .hist-duration {
+    font-family: 'Syne', sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text);
+    text-align: right;
+  }
+
+  .hist-pct {
+    font-size: 11px;
+    color: var(--text2);
+    text-align: right;
+    margin-top: 2px;
+  }
+
+  .hist-pct.good { color: var(--green); }
+
+  /* Bar chart */
+  .bar-chart {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 16px 16px;
+    margin-bottom: 16px;
+  }
+
+  .bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 6px;
+    height: 80px;
+    margin-bottom: 8px;
+  }
+
+  .bar-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    height: 100%;
+    justify-content: flex-end;
+    gap: 4px;
+    cursor: pointer;
+  }
+
+  .bar {
+    width: 100%;
+    border-radius: 4px 4px 0 0;
+    min-height: 3px;
+    transition: height 0.5s ease;
+    background: var(--accent-dim);
+    border: 1px solid rgba(124,106,247,0.3);
+  }
+
+  .bar.complete { background: var(--green-dim); border-color: rgba(52,211,153,0.4); }
+  .bar.active { background: var(--accent); border-color: var(--accent); }
+
+  .bar-day {
+    font-size: 10px;
+    color: var(--text3);
+    text-transform: uppercase;
+  }
+
+  /* Settings */
+  .setting-row {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .setting-label {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text);
+  }
+
+  .setting-sub {
+    font-size: 12px;
+    color: var(--text2);
+    margin-top: 2px;
+  }
+
+  .toggle {
+    width: 44px;
+    height: 24px;
+    background: var(--surface2);
+    border-radius: 99px;
+    border: 1px solid var(--border2);
+    cursor: pointer;
+    position: relative;
+    transition: background 0.3s;
+    flex-shrink: 0;
+  }
+
+  .toggle.on { background: var(--accent); border-color: var(--accent); }
+  .toggle::after {
+    content: '';
+    position: absolute;
+    width: 18px;
+    height: 18px;
+    background: #fff;
+    border-radius: 50%;
+    top: 2px;
+    left: 2px;
+    transition: transform 0.3s;
+  }
+  .toggle.on::after { transform: translateX(20px); }
+
+  /* Time picker */
+  .time-input {
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    outline: none;
+    text-align: center;
+    width: 90px;
+  }
+
+  .time-input:focus { border-color: var(--accent); }
+
+  /* Bottom nav */
+  .bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100%;
+    max-width: 480px;
+    background: rgba(13,15,20,0.92);
+    backdrop-filter: blur(20px);
+    border-top: 1px solid var(--border);
+    display: flex;
+    padding: 8px 0 20px;
+    z-index: 100;
+  }
+
+  .nav-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    padding: 8px 0;
+    transition: opacity 0.2s;
+    border: none;
+    background: none;
+    color: var(--text3);
+  }
+
+  .nav-item.active { color: var(--accent2); }
+
+  .nav-icon { font-size: 22px; line-height: 1; }
+  .nav-label { font-size: 10px; font-weight: 500; letter-spacing: 0.04em; text-transform: uppercase; }
+
+  /* Empty state */
+  .empty-state {
+    text-align: center;
+    padding: 48px 24px;
+    color: var(--text3);
+  }
+
+  .empty-icon { font-size: 48px; margin-bottom: 12px; }
+  .empty-text { font-size: 14px; line-height: 1.8; }
+
+  /* Toast */
+  #toast {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-80px);
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    color: var(--text);
+    padding: 12px 24px;
+    border-radius: 99px;
+    font-size: 13px;
+    font-weight: 500;
+    z-index: 999;
+    transition: transform 0.3s ease;
+    white-space: nowrap;
+  }
+
+  #toast.show { transform: translateX(-50%) translateY(0); }
+
+  /* Modal */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 200;
+    align-items: flex-end;
+    justify-content: center;
+  }
+  .modal-overlay.show { display: flex; }
+
+  .modal {
+    background: var(--surface);
+    border-top-left-radius: 24px;
+    border-top-right-radius: 24px;
+    border: 1px solid var(--border2);
+    border-bottom: none;
+    padding: 24px 24px 40px;
+    width: 100%;
+    max-width: 480px;
+    animation: slideUp 0.3s ease;
+  }
+
+  @keyframes slideUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+
+  .modal-handle {
+    width: 36px;
+    height: 4px;
+    background: var(--border2);
+    border-radius: 99px;
+    margin: 0 auto 20px;
+  }
+
+  .modal-title {
+    font-family: 'Syne', sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 16px;
+    text-align: center;
+  }
+
+  .modal-text {
+    font-size: 14px;
+    color: var(--text2);
+    text-align: center;
+    line-height: 1.8;
+    margin-bottom: 24px;
+  }
+
+  .modal-btn {
+    width: 100%;
+    padding: 14px;
+    border-radius: var(--radius);
+    font-family: 'Syne', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s;
+    margin-bottom: 8px;
+  }
+
+  .modal-btn.primary { background: var(--accent); color: #fff; }
+  .modal-btn.danger { background: var(--red-dim); color: var(--red); border: 1px solid rgba(248,113,113,0.3); }
+  .modal-btn.ghost { background: transparent; color: var(--text2); border: 1px solid var(--border); }
+
+  .badge-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-top: 8px;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border-radius: 99px;
+    font-size: 12px;
+    font-weight: 500;
+    border: 1px solid transparent;
+  }
+
+  .badge.green { background: var(--green-dim); color: var(--green); border-color: rgba(52,211,153,0.2); }
+  .badge.amber { background: var(--amber-dim); color: var(--amber); border-color: rgba(251,191,36,0.2); }
+  .badge.purple { background: var(--accent-dim); color: var(--accent2); border-color: rgba(124,106,247,0.2); }
+
+  .note-input {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border2);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    padding: 12px;
+    border-radius: var(--radius-sm);
+    outline: none;
+    resize: none;
+    margin-bottom: 12px;
+  }
+  .note-input:focus { border-color: var(--accent); }
+  .note-input::placeholder { color: var(--text3); }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <!-- Top bar -->
+  <div class="topbar">
+    <div class="logo">Fast<span>Track</span></div>
+    <div class="streak-badge">
+      <span class="fire">🔥</span>
+      <span id="streakCount">0</span> hari
+    </div>
+  </div>
+
+  <!-- HOME PAGE -->
+  <div class="page active" id="page-home">
+    <!-- Timer Card -->
+    <div class="timer-card" style="margin-top: 20px;">
+      <div class="timer-status">
+        <div class="status-dot" id="statusDot"></div>
+        <span id="statusText">Belum mulai</span>
+      </div>
+
+      <div class="ring-wrap">
+        <svg class="ring-svg" width="200" height="200" viewBox="0 0 200 200">
+          <circle class="ring-bg" cx="100" cy="100" r="86"/>
+          <circle class="ring-prog" id="ringProg" cx="100" cy="100" r="86"
+            stroke-dasharray="540"
+            stroke-dashoffset="540"/>
+        </svg>
+        <div class="ring-center">
+          <div class="ring-time" id="ringTime">00:00:00</div>
+          <div class="ring-label" id="ringLabel">Elapsed</div>
+          <div class="ring-pct" id="ringPct">0%</div>
+        </div>
+      </div>
+
+      <div class="protocol-row" id="protocolRow">
+        <button class="proto-btn active" onclick="setProtocol(16,8)">16:8</button>
+        <button class="proto-btn" onclick="setProtocol(18,6)">18:6</button>
+        <button class="proto-btn" onclick="setProtocol(20,4)">20:4</button>
+        <button class="proto-btn" onclick="setProtocol(23,1)">OMAD</button>
+      </div>
+
+      <button class="cta-btn start" id="mainBtn" onclick="toggleFast()">
+        Mulai Puasa
+      </button>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-val" id="statsTotal">0</div>
+        <div class="stat-label">Total Sesi</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val" id="statsCompleted">0</div>
+        <div class="stat-label">Selesai</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val" id="statsBest">—</div>
+        <div class="stat-label">Terlama</div>
+      </div>
+    </div>
+
+    <!-- Weekly chart -->
+    <div class="bar-chart">
+      <div class="section-title" style="margin-top: 0;">7 Hari Terakhir</div>
+      <div class="bars" id="weekBars"></div>
+    </div>
+
+    <!-- Recent -->
+    <div class="section-title">Sesi Terakhir</div>
+    <div id="recentList"></div>
+  </div>
+
+  <!-- HISTORY PAGE -->
+  <div class="page" id="page-history">
+    <div style="padding-top: 16px; display: flex; align-items: center; justify-content: space-between;">
+      <div style="font-family: Syne; font-size: 22px; font-weight: 800;">Riwayat</div>
+      <button onclick="showClearModal()" style="background: none; border: none; color: var(--text3); font-size: 13px; cursor: pointer; font-family: DM Sans;">Hapus semua</button>
+    </div>
+    <div id="allHistory" style="margin-top: 16px;"></div>
+  </div>
+
+  <!-- SETTINGS PAGE -->
+  <div class="page" id="page-settings">
+    <div style="padding-top: 16px; font-family: Syne; font-size: 22px; font-weight: 800; margin-bottom: 20px;">Pengaturan</div>
+
+    <div class="section-title">Protokol Default</div>
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">Jam Puasa</div>
+        <div class="setting-sub">Target durasi puasa</div>
+      </div>
+      <input type="number" class="time-input" id="settingFastHours" min="1" max="24" value="16" onchange="saveSetting()">
+    </div>
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">Jam Makan</div>
+        <div class="setting-sub">Jendela makan</div>
+      </div>
+      <input type="number" class="time-input" id="settingEatHours" min="1" max="23" value="8" onchange="saveSetting()">
+    </div>
+
+    <div class="section-title">Notifikasi</div>
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">Reminder Harian</div>
+        <div class="setting-sub">Ingatkan untuk mulai puasa</div>
+      </div>
+      <div class="toggle" id="toggleNotif" onclick="toggleSetting('notif')"></div>
+    </div>
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">Suara Selesai</div>
+        <div class="setting-sub">Bunyi saat target tercapai</div>
+      </div>
+      <div class="toggle on" id="toggleSound" onclick="toggleSetting('sound')"></div>
+    </div>
+
+    <div class="section-title">Data</div>
+    <div class="setting-row" style="cursor: pointer;" onclick="exportData()">
+      <div>
+        <div class="setting-label">Export Data</div>
+        <div class="setting-sub">Download sebagai JSON</div>
+      </div>
+      <span style="color: var(--text2); font-size: 18px;">↓</span>
+    </div>
+    <div class="setting-row" style="cursor: pointer;" onclick="showClearModal()">
+      <div>
+        <div class="setting-label" style="color: var(--red);">Reset Semua Data</div>
+        <div class="setting-sub">Hapus semua riwayat dan pengaturan</div>
+      </div>
+      <span style="color: var(--red); font-size: 18px;">⚠</span>
+    </div>
+
+    <div style="text-align: center; padding: 32px 0; color: var(--text3); font-size: 12px;">
+      FastTrack v1.0 · Data tersimpan lokal di browser
+    </div>
+  </div>
+</div>
+
+<!-- Bottom Nav -->
+<div class="bottom-nav">
+  <button class="nav-item active" id="nav-home" onclick="switchPage('home')">
+    <span class="nav-icon">⏱</span>
+    <span class="nav-label">Timer</span>
+  </button>
+  <button class="nav-item" id="nav-history" onclick="switchPage('history')">
+    <span class="nav-icon">📋</span>
+    <span class="nav-label">Riwayat</span>
+  </button>
+  <button class="nav-item" id="nav-settings" onclick="switchPage('settings')">
+    <span class="nav-icon">⚙️</span>
+    <span class="nav-label">Pengaturan</span>
+  </button>
+</div>
+
+<!-- Toast -->
+<div id="toast">Berhasil disimpan!</div>
+
+<!-- Stop Confirm Modal -->
+<div class="modal-overlay" id="stopModal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Akhiri Puasa?</div>
+    <div class="modal-text" id="stopModalText">Puasamu belum mencapai target. Yakin ingin mengakhiri sekarang?</div>
+    <textarea class="note-input" id="fastNote" rows="2" placeholder="Catatan (opsional)..."></textarea>
+    <button class="modal-btn primary" onclick="confirmStop()">Ya, Akhiri</button>
+    <button class="modal-btn ghost" onclick="closeModal('stopModal')">Lanjutkan Puasa</button>
+  </div>
+</div>
+
+<!-- Clear All Modal -->
+<div class="modal-overlay" id="clearModal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Hapus Semua Data?</div>
+    <div class="modal-text">Semua riwayat puasa akan dihapus permanen. Tindakan ini tidak bisa dibatalkan.</div>
+    <button class="modal-btn danger" onclick="clearAllData()">Hapus Permanen</button>
+    <button class="modal-btn ghost" onclick="closeModal('clearModal')">Batal</button>
+  </div>
+</div>
+
+<!-- Complete Modal -->
+<div class="modal-overlay" id="completeModal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">🎉 Target Tercapai!</div>
+    <div class="modal-text" id="completeText">Kamu berhasil menyelesaikan puasa hari ini!</div>
+    <div class="badge-row" style="justify-content: center; margin-bottom: 20px;" id="badgeRow"></div>
+    <textarea class="note-input" id="completeNote" rows="2" placeholder="Catatan (opsional)..."></textarea>
+    <button class="modal-btn primary" onclick="confirmComplete()">Selesai & Simpan</button>
+    <button class="modal-btn ghost" onclick="continueAfterComplete()">Lanjutkan Puasa</button>
+  </div>
+</div>
+
+<script>
+// ============ STATE ============
+const STORAGE_KEY = 'fasttrack_v1';
+let state = {
+  sessions: [],
+  current: null,
+  settings: { fastHours: 16, eatHours: 8, notif: false, sound: true },
+  streak: 0
+};
+
+let timerInterval = null;
+let completedCelebrated = false;
+
+// ============ PERSIST ============
+function save() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch(e) {}
+}
+
+function load() {
+  try {
+    const d = localStorage.getItem(STORAGE_KEY);
+    if (d) state = { ...state, ...JSON.parse(d) };
+  } catch(e) {}
+}
+
+// ============ PROTOCOL ============
+let currentProtocol = { fast: 16, eat: 8 };
+
+function setProtocol(fast, eat) {
+  currentProtocol = { fast, eat };
+  document.querySelectorAll('.proto-btn').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  updateRing();
+}
+
+// ============ TIMER ============
+function toggleFast() {
+  if (state.current) {
+    showStopModal();
+  } else {
+    startFast();
+  }
+}
+
+function startFast() {
+  completedCelebrated = false;
+  state.current = {
+    id: Date.now(),
+    startTime: Date.now(),
+    targetHours: currentProtocol.fast,
+    note: ''
+  };
+  save();
+  startInterval();
+  updateUI();
+  showToast('Puasa dimulai! Semangat 💪');
+}
+
+function showStopModal() {
+  const c = state.current;
+  if (!c) return;
+  const elapsed = (Date.now() - c.startTime) / 3600000;
+  const pct = Math.min(100, Math.round(elapsed / c.targetHours * 100));
+  const complete = pct >= 100;
+
+  if (complete) {
+    showCompleteModal();
+    return;
+  }
+
+  document.getElementById('stopModalText').textContent =
+    `Baru ${formatHours(elapsed)} dari target ${c.targetHours} jam (${pct}%). Yakin mau berhenti?`;
+  document.getElementById('fastNote').value = '';
+  openModal('stopModal');
+}
+
+function confirmStop() {
+  const note = document.getElementById('fastNote').value;
+  finishFast(false, note);
+  closeModal('stopModal');
+}
+
+function showCompleteModal() {
+  const c = state.current;
+  const elapsed = (Date.now() - c.startTime) / 3600000;
+  document.getElementById('completeText').textContent =
+    `Durasi: ${formatHours(elapsed)} dari target ${c.targetHours} jam. Luar biasa!`;
+  const br = document.getElementById('badgeRow');
+  br.innerHTML = '';
+
+  const streak = calcStreak(true);
+  if (streak >= 7) br.innerHTML += `<div class="badge amber">🔥 ${streak} hari beruntun</div>`;
+  if (elapsed >= 18) br.innerHTML += `<div class="badge purple">⚡ Marathon Fast</div>`;
+  br.innerHTML += `<div class="badge green">✓ Target tercapai</div>`;
+
+  document.getElementById('completeNote').value = '';
+  openModal('completeModal');
+}
+
+function confirmComplete() {
+  const note = document.getElementById('completeNote').value;
+  finishFast(true, note);
+  closeModal('completeModal');
+}
+
+function continueAfterComplete() {
+  closeModal('completeModal');
+  completedCelebrated = true;
+}
+
+function finishFast(completed, note) {
+  if (!state.current) return;
+  const elapsed = Date.now() - state.current.startTime;
+
+  state.sessions.unshift({
+    id: state.current.id,
+    startTime: state.current.startTime,
+    endTime: Date.now(),
+    duration: elapsed,
+    targetHours: state.current.targetHours,
+    completed,
+    note: note || ''
+  });
+
+  state.current = null;
+  completedCelebrated = false;
+  state.streak = calcStreak();
+  save();
+  clearInterval(timerInterval);
+  timerInterval = null;
+  updateUI();
+  renderHistory();
+  renderWeekBars();
+  updateStats();
+  showToast(completed ? '🎉 Puasa selesai! Tersimpan.' : 'Sesi disimpan.');
+}
+
+function startInterval() {
+  if (timerInterval) clearInterval(timerInterval);
+  timerInterval = setInterval(() => {
+    updateRing();
+    checkAutoComplete();
+  }, 1000);
+}
+
+function checkAutoComplete() {
+  if (!state.current || completedCelebrated) return;
+  const elapsed = (Date.now() - state.current.startTime) / 3600000;
+  if (elapsed >= state.current.targetHours) {
+    if (!completedCelebrated) {
+      completedCelebrated = true;
+      if (state.settings.sound) playSound();
+      showCompleteModal();
+    }
+  }
+}
+
+function playSound() {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    [523, 659, 784].forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.frequency.value = freq;
+      osc.type = 'sine';
+      gain.gain.setValueAtTime(0, ctx.currentTime + i * 0.15);
+      gain.gain.linearRampToValueAtTime(0.2, ctx.currentTime + i * 0.15 + 0.05);
+      gain.gain.linearRampToValueAtTime(0, ctx.currentTime + i * 0.15 + 0.25);
+      osc.start(ctx.currentTime + i * 0.15);
+      osc.stop(ctx.currentTime + i * 0.15 + 0.3);
+    });
+  } catch(e) {}
+}
+
+// ============ UI UPDATE ============
+function updateUI() {
+  updateRing();
+  updateStats();
+  renderRecent();
+  renderHistory();
+  renderWeekBars();
+  document.getElementById('streakCount').textContent = state.streak;
+
+  // settings
+  document.getElementById('settingFastHours').value = state.settings.fastHours;
+  document.getElementById('settingEatHours').value = state.settings.eatHours;
+  document.getElementById('toggleNotif').className = 'toggle' + (state.settings.notif ? ' on' : '');
+  document.getElementById('toggleSound').className = 'toggle' + (state.settings.sound ? ' on' : '');
+}
+
+function updateRing() {
+  const c = state.current;
+  const dot = document.getElementById('statusDot');
+  const txt = document.getElementById('statusText');
+  const rtime = document.getElementById('ringTime');
+  const rlabel = document.getElementById('ringLabel');
+  const rpct = document.getElementById('ringPct');
+  const ring = document.getElementById('ringProg');
+  const btn = document.getElementById('mainBtn');
+
+  if (!c) {
+    dot.className = 'status-dot';
+    txt.textContent = 'Belum mulai';
+    rtime.textContent = '00:00:00';
+    rlabel.textContent = 'Mulai puasa';
+    rpct.textContent = '0%';
+    ring.style.strokeDashoffset = '540';
+    ring.className = 'ring-prog';
+    btn.className = 'cta-btn start';
+    btn.textContent = 'Mulai Puasa';
+    document.getElementById('protocolRow').style.opacity = '1';
+    document.getElementById('protocolRow').style.pointerEvents = 'auto';
+    return;
+  }
+
+  document.getElementById('protocolRow').style.opacity = '0.4';
+  document.getElementById('protocolRow').style.pointerEvents = 'none';
+
+  const elapsed = Date.now() - c.startTime;
+  const target = c.targetHours * 3600 * 1000;
+  const pct = Math.min(100, (elapsed / target) * 100);
+  const circumference = 540;
+  const offset = circumference - (pct / 100) * circumference;
+
+  ring.style.strokeDashoffset = offset;
+
+  if (pct >= 100) {
+    ring.className = 'ring-prog eating';
+    dot.className = 'status-dot eating';
+    txt.textContent = 'Target tercapai!';
+  } else if (pct >= 75) {
+    ring.className = 'ring-prog warning';
+    dot.className = 'status-dot fasting';
+    txt.textContent = 'Sedang berpuasa';
+  } else {
+    ring.className = 'ring-prog';
+    dot.className = 'status-dot fasting';
+    txt.textContent = 'Sedang berpuasa';
+  }
+
+  rtime.textContent = formatMs(elapsed);
+  rlabel.textContent = `Target: ${c.targetHours} jam`;
+  rpct.textContent = Math.round(pct) + '%';
+
+  btn.className = 'cta-btn stop';
+  btn.textContent = pct >= 100 ? 'Selesaikan Puasa ✓' : 'Akhiri Puasa';
+}
+
+function updateStats() {
+  const sessions = state.sessions;
+  const completed = sessions.filter(s => s.completed).length;
+  let best = 0;
+  sessions.forEach(s => { if (s.duration > best) best = s.duration; });
+
+  document.getElementById('statsTotal').textContent = sessions.length;
+  document.getElementById('statsCompleted').textContent = completed;
+  document.getElementById('statsBest').textContent = best > 0 ? formatHours(best / 3600000) : '—';
+}
+
+function renderRecent() {
+  const list = document.getElementById('recentList');
+  const recent = state.sessions.slice(0, 3);
+  if (!recent.length && !state.current) {
+    list.innerHTML = `<div class="empty-state"><div class="empty-icon">🌙</div><div class="empty-text">Belum ada sesi puasa.<br>Mulai puasa pertamamu sekarang!</div></div>`;
+    return;
+  }
+  list.innerHTML = recent.map(sessionHTML).join('');
+}
+
+function renderHistory() {
+  const list = document.getElementById('allHistory');
+  if (!state.sessions.length) {
+    list.innerHTML = `<div class="empty-state"><div class="empty-icon">📋</div><div class="empty-text">Belum ada riwayat.</div></div>`;
+    return;
+  }
+  list.innerHTML = state.sessions.map(sessionHTML).join('');
+}
+
+function sessionHTML(s) {
+  const dur = s.duration / 3600000;
+  const pct = Math.min(100, Math.round(dur / s.targetHours * 100));
+  const dt = new Date(s.startTime);
+  const dayNames = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
+  const months = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
+  const dateStr = `${dayNames[dt.getDay()]}, ${dt.getDate()} ${months[dt.getMonth()]}`;
+  const timeStr = dt.toLocaleTimeString('id', { hour: '2-digit', minute: '2-digit' });
+
+  return `<div class="history-item">
+    <div class="hist-icon ${s.completed ? 'complete' : 'incomplete'}">${s.completed ? '✓' : '⚡'}</div>
+    <div class="hist-info">
+      <div class="hist-date">${dateStr}</div>
+      <div class="hist-detail">${timeStr} · ${s.targetHours}:${24 - s.targetHours}${s.note ? ' · ' + s.note.slice(0, 20) : ''}</div>
+    </div>
+    <div>
+      <div class="hist-duration">${formatHours(dur)}</div>
+      <div class="hist-pct ${pct >= 100 ? 'good' : ''}">${pct}%</div>
+    </div>
+  </div>`;
+}
+
+function renderWeekBars() {
+  const container = document.getElementById('weekBars');
+  const days = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    d.setHours(0, 0, 0, 0);
+    const next = new Date(d); next.setDate(d.getDate() + 1);
+    const sessions = state.sessions.filter(s => s.startTime >= d.getTime() && s.startTime < next.getTime());
+    const totalHours = sessions.reduce((acc, s) => acc + s.duration / 3600000, 0);
+    const isToday = i === 0;
+    days.push({ d, hours: Math.min(totalHours, 24), complete: sessions.some(s => s.completed), isToday });
+  }
+
+  const maxH = Math.max(...days.map(d => d.hours), 1);
+  const dayNames = ['M', 'S', 'S', 'R', 'K', 'J', 'S'];
+
+  container.innerHTML = days.map((day, i) => {
+    const h = (day.hours / maxH) * 100;
+    const cls = day.isToday && state.current ? 'bar active' : day.complete ? 'bar complete' : 'bar';
+    return `<div class="bar-col">
+      <div class="${cls}" style="height: ${Math.max(3, h)}%"></div>
+      <div class="bar-day">${dayNames[day.d.getDay()]}</div>
+    </div>`;
+  }).join('');
+}
+
+// ============ STREAK ============
+function calcStreak(includeToday = false) {
+  let streak = 0;
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+
+  for (let i = 0; i < 365; i++) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - (includeToday ? i : i + 1));
+    const next = new Date(d); next.setDate(d.getDate() + 1);
+    const has = state.sessions.some(s => s.completed && s.startTime >= d.getTime() && s.startTime < next.getTime());
+    if (has) streak++;
+    else if (i > 0 || !includeToday) break;
+  }
+  return streak;
+}
+
+// ============ SETTINGS ============
+function saveSetting() {
+  state.settings.fastHours = parseInt(document.getElementById('settingFastHours').value) || 16;
+  state.settings.eatHours = parseInt(document.getElementById('settingEatHours').value) || 8;
+  currentProtocol.fast = state.settings.fastHours;
+  save();
+  showToast('Pengaturan disimpan');
+}
+
+function toggleSetting(key) {
+  state.settings[key] = !state.settings[key];
+  const el = document.getElementById('toggle' + key.charAt(0).toUpperCase() + key.slice(1));
+  if (el) el.className = 'toggle' + (state.settings[key] ? ' on' : '');
+  save();
+}
+
+function exportData() {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'fasttrack-data-' + new Date().toISOString().slice(0, 10) + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('Data berhasil diexport');
+}
+
+function showClearModal() { openModal('clearModal'); }
+
+function clearAllData() {
+  state.sessions = [];
+  state.current = null;
+  state.streak = 0;
+  save();
+  clearInterval(timerInterval);
+  timerInterval = null;
+  completedCelebrated = false;
+  closeModal('clearModal');
+  updateUI();
+  showToast('Semua data dihapus');
+}
+
+// ============ NAVIGATION ============
+function switchPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  document.getElementById('nav-' + name).classList.add('active');
+  if (name === 'history') renderHistory();
+}
+
+// ============ MODAL ============
+function openModal(id) { document.getElementById(id).classList.add('show'); }
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+
+document.querySelectorAll('.modal-overlay').forEach(el => {
+  el.addEventListener('click', e => { if (e.target === el) closeModal(el.id); });
+});
+
+// ============ TOAST ============
+let toastTimer;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ============ HELPERS ============
+function formatMs(ms) {
+  const s = Math.floor(ms / 1000);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  return [h, m, sec].map(v => String(v).padStart(2, '0')).join(':');
+}
+
+function formatHours(h) {
+  const hours = Math.floor(h);
+  const mins = Math.round((h - hours) * 60);
+  if (mins === 0) return `${hours}j`;
+  return `${hours}j ${mins}m`;
+}
+
+// ============ INIT ============
+load();
+state.streak = calcStreak();
+
+if (state.current) {
+  const elapsed = (Date.now() - state.current.startTime) / 3600000;
+  const proto = state.current.targetHours;
+  currentProtocol.fast = proto;
+  document.querySelectorAll('.proto-btn').forEach(b => {
+    if (parseInt(b.textContent) === proto) b.classList.add('active');
+    else b.classList.remove('active');
+  });
+  startInterval();
+  if (elapsed >= proto) completedCelebrated = true;
+}
+
+updateUI();
+</script>
+</body>
+</html>
