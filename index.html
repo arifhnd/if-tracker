@@ -747,9 +747,30 @@
     <div class="setting-row">
       <div>
         <div class="setting-label">Reminder Harian</div>
-        <div class="setting-sub">Ingatkan untuk mulai puasa</div>
+        <div class="setting-sub" id="notifSubtext">Ingatkan untuk mulai puasa</div>
       </div>
-      <div class="toggle" id="toggleNotif" onclick="toggleSetting('notif')"></div>
+      <div class="toggle" id="toggleNotif" onclick="toggleNotifSetting()"></div>
+    </div>
+    <div class="setting-row" id="reminderTimeRow" style="display:none;">
+      <div>
+        <div class="setting-label">Jam Reminder</div>
+        <div class="setting-sub">Notifikasi dikirim setiap hari pada jam ini</div>
+      </div>
+      <input type="time" class="time-input" id="reminderTime" value="20:00" onchange="saveReminderTime()" style="width:110px;">
+    </div>
+    <div class="setting-row" id="notifPermRow" style="display:none;">
+      <div style="flex:1;">
+        <div class="setting-label" style="color:var(--amber);">⚠ Izin Notifikasi</div>
+        <div class="setting-sub">Browser perlu izin untuk mengirim notifikasi</div>
+      </div>
+      <button onclick="requestNotifPermission()" style="background:var(--amber-dim);border:1px solid rgba(251,191,36,0.3);color:var(--amber);font-family:Syne;font-size:12px;font-weight:600;padding:7px 14px;border-radius:99px;cursor:pointer;flex-shrink:0;">Izinkan</button>
+    </div>
+    <div class="setting-row">
+      <div>
+        <div class="setting-label">Notifikasi Selesai</div>
+        <div class="setting-sub">Kirim notifikasi saat target puasa tercapai</div>
+      </div>
+      <div class="toggle on" id="toggleNotifComplete" onclick="toggleSetting('notifComplete')"></div>
     </div>
     <div class="setting-row">
       <div>
@@ -988,6 +1009,9 @@ function checkAutoComplete() {
     if (!completedCelebrated) {
       completedCelebrated = true;
       if (state.settings.sound) playSound();
+      if (state.settings.notifComplete !== false) {
+        sendNotification('FastTrack 🎉 Target Tercapai!', `Kamu telah berpuasa ${state.current.targetHours} jam. Buka app untuk menyelesaikan sesi.`);
+      }
       showCompleteModal();
     }
   }
@@ -1025,7 +1049,9 @@ function updateUI() {
   document.getElementById('settingEatHours').value = state.settings.eatHours;
   document.getElementById('toggleNotif').className = 'toggle' + (state.settings.notif ? ' on' : '');
   document.getElementById('toggleSound').className = 'toggle' + (state.settings.sound ? ' on' : '');
-}
+  document.getElementById('toggleNotifComplete').className = 'toggle' + (state.settings.notifComplete !== false ? ' on' : '');
+  if (state.settings.reminderTime) document.getElementById('reminderTime').value = state.settings.reminderTime;
+  updateNotifUI();}
 
 function updateRing() {
   const c = state.current;
@@ -1191,9 +1217,153 @@ function saveSetting() {
 
 function toggleSetting(key) {
   state.settings[key] = !state.settings[key];
-  const el = document.getElementById('toggle' + key.charAt(0).toUpperCase() + key.slice(1));
+  const elId = 'toggle' + key.charAt(0).toUpperCase() + key.slice(1);
+  const el = document.getElementById(elId);
   if (el) el.className = 'toggle' + (state.settings[key] ? ' on' : '');
   save();
+}
+
+// ============ REMINDER / NOTIFICATION ============
+let reminderTimeout = null;
+let reminderCheckInterval = null;
+
+function updateNotifUI() {
+  const on = state.settings.notif;
+  const perm = Notification.permission;
+  document.getElementById('reminderTimeRow').style.display = on ? '' : 'none';
+  const permRow = document.getElementById('notifPermRow');
+  permRow.style.display = (on && perm !== 'granted') ? '' : 'none';
+  const sub = document.getElementById('notifSubtext');
+  if (on && perm === 'granted') {
+    const t = state.settings.reminderTime || '20:00';
+    sub.textContent = `Aktif · setiap hari pukul ${t}`;
+    sub.style.color = 'var(--green)';
+  } else if (on && perm === 'denied') {
+    sub.textContent = 'Diblokir browser — ubah di pengaturan browser';
+    sub.style.color = 'var(--red)';
+  } else {
+    sub.textContent = 'Ingatkan untuk mulai puasa';
+    sub.style.color = '';
+  }
+}
+
+async function toggleNotifSetting() {
+  if (!state.settings.notif) {
+    // turning ON
+    if (!('Notification' in window)) {
+      showToast('Browser tidak mendukung notifikasi');
+      return;
+    }
+    state.settings.notif = true;
+    if (!state.settings.reminderTime) state.settings.reminderTime = '20:00';
+    document.getElementById('toggleNotif').className = 'toggle on';
+    save();
+    updateNotifUI();
+    if (Notification.permission !== 'granted') {
+      await requestNotifPermission();
+    } else {
+      scheduleReminder();
+      showToast('Reminder diaktifkan ✓');
+    }
+  } else {
+    // turning OFF
+    state.settings.notif = false;
+    document.getElementById('toggleNotif').className = 'toggle';
+    cancelReminder();
+    save();
+    updateNotifUI();
+    showToast('Reminder dimatikan');
+  }
+}
+
+async function requestNotifPermission() {
+  try {
+    const result = await Notification.requestPermission();
+    if (result === 'granted') {
+      scheduleReminder();
+      updateNotifUI();
+      showToast('Izin diberikan! Reminder aktif ✓');
+    } else if (result === 'denied') {
+      state.settings.notif = false;
+      document.getElementById('toggleNotif').className = 'toggle';
+      save();
+      updateNotifUI();
+      showToast('Izin ditolak. Aktifkan di pengaturan browser.');
+    } else {
+      updateNotifUI();
+    }
+  } catch(e) {
+    showToast('Gagal meminta izin notifikasi');
+  }
+}
+
+function saveReminderTime() {
+  state.settings.reminderTime = document.getElementById('reminderTime').value;
+  save();
+  if (state.settings.notif && Notification.permission === 'granted') {
+    cancelReminder();
+    scheduleReminder();
+    showToast(`Reminder diatur ke ${state.settings.reminderTime}`);
+  }
+  updateNotifUI();
+}
+
+function scheduleReminder() {
+  cancelReminder();
+  if (!state.settings.notif || Notification.permission !== 'granted') return;
+
+  const fire = () => {
+    if (!state.settings.notif) return;
+    if (state.current) return; // already fasting, skip
+    const todayDone = state.sessions.some(s => {
+      const d = new Date(s.startTime);
+      const today = new Date(); today.setHours(0,0,0,0);
+      return s.startTime >= today.getTime();
+    });
+    if (todayDone) return;
+    try {
+      const n = new Notification('FastTrack 🌙', {
+        body: 'Sudah waktunya mulai puasa! Buka app untuk memulai.',
+        icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">🌙</text></svg>',
+        badge: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">🌙</text></svg>',
+        tag: 'fasttrack-reminder',
+        renotify: true
+      });
+      n.onclick = () => { window.focus(); n.close(); };
+    } catch(e) {}
+  };
+
+  const getMsUntilNext = () => {
+    const [h, m] = (state.settings.reminderTime || '20:00').split(':').map(Number);
+    const now = new Date();
+    const target = new Date();
+    target.setHours(h, m, 0, 0);
+    if (target <= now) target.setDate(target.getDate() + 1);
+    return target - now;
+  };
+
+  reminderTimeout = setTimeout(() => {
+    fire();
+    reminderCheckInterval = setInterval(fire, 24 * 60 * 60 * 1000);
+  }, getMsUntilNext());
+}
+
+function cancelReminder() {
+  if (reminderTimeout) { clearTimeout(reminderTimeout); reminderTimeout = null; }
+  if (reminderCheckInterval) { clearInterval(reminderCheckInterval); reminderCheckInterval = null; }
+}
+
+function sendNotification(title, body) {
+  if (Notification.permission !== 'granted') return;
+  try {
+    const n = new Notification(title, {
+      body,
+      icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">⏱</text></svg>',
+      tag: 'fasttrack-event',
+    });
+    n.onclick = () => { window.focus(); n.close(); };
+    setTimeout(() => n.close(), 8000);
+  } catch(e) {}
 }
 
 function exportData() {
@@ -1282,6 +1452,11 @@ if (state.current) {
 }
 
 updateUI();
-</script>
+
+// restore reminder schedule if it was on
+if (state.settings.notif && Notification.permission === 'granted') {
+  scheduleReminder();
+}
+
 </body>
 </html>
